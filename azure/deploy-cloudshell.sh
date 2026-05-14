@@ -285,13 +285,28 @@ az storage account create \
   --min-tls-version TLS1_2 \
   --output none
 
-az storage blob service-properties update \
+echo "Configuring static website on storage account..."
+if ! az storage blob service-properties update \
   --account-name "$STORAGE_ACCOUNT_NAME" \
   --static-website \
   --index-document index.html \
   --404-document index.html \
   --auth-mode login \
-  --output none
+  --output none; then
+  echo "RBAC data-plane permission missing for storage account. Falling back to account key auth..."
+  STORAGE_KEY="$(az storage account keys list \
+    --resource-group "$RESOURCE_GROUP" \
+    --account-name "$STORAGE_ACCOUNT_NAME" \
+    --query '[0].value' -o tsv)"
+  az storage blob service-properties update \
+    --account-name "$STORAGE_ACCOUNT_NAME" \
+    --account-key "$STORAGE_KEY" \
+    --static-website \
+    --index-document index.html \
+    --404-document index.html \
+    --auth-mode key \
+    --output none
+fi
 
 echo "Allowing frontend origin on backend CORS..."
 STATIC_ENDPOINT="$(az storage account show \
@@ -317,13 +332,29 @@ EOF
 )
 
 echo "Uploading frontend static files..."
-az storage blob upload-batch \
+if ! az storage blob upload-batch \
   --account-name "$STORAGE_ACCOUNT_NAME" \
   --destination '$web' \
   --source "$FRONTEND_DIR/dist" \
   --auth-mode login \
   --overwrite \
-  --output none
+  --output none; then
+  echo "RBAC data-plane permission missing for blob upload. Falling back to account key auth..."
+  if [[ -z "${STORAGE_KEY:-}" ]]; then
+    STORAGE_KEY="$(az storage account keys list \
+      --resource-group "$RESOURCE_GROUP" \
+      --account-name "$STORAGE_ACCOUNT_NAME" \
+      --query '[0].value' -o tsv)"
+  fi
+  az storage blob upload-batch \
+    --account-name "$STORAGE_ACCOUNT_NAME" \
+    --account-key "$STORAGE_KEY" \
+    --destination '$web' \
+    --source "$FRONTEND_DIR/dist" \
+    --auth-mode key \
+    --overwrite \
+    --output none
+fi
 
 echo "\nDeployment complete."
 echo "----------------------------------------"
