@@ -118,15 +118,34 @@ if [[ "$CREATE_AOAI_RESOURCE" == "true" ]]; then
     echo "Azure OpenAI account already exists: $AOAI_ACCOUNT_NAME"
   else
     echo "Creating Azure OpenAI account..."
-    az cognitiveservices account create \
-      --name "$AOAI_ACCOUNT_NAME" \
-      --resource-group "$AOAI_RESOURCE_GROUP" \
-      --location "$AOAI_LOCATION" \
-      --kind OpenAI \
-      --sku "$AOAI_SKU" \
-      --custom-domain "$AOAI_ACCOUNT_NAME" \
-      --yes \
-      --output none
+    BASE_AOAI_ACCOUNT_NAME="$AOAI_ACCOUNT_NAME"
+    AOAI_CREATED=false
+    for attempt in 1 2 3 4 5; do
+      if [[ "$attempt" -gt 1 ]]; then
+        # Retry with a unique suffix if name/custom-domain is already taken.
+        AOAI_ACCOUNT_NAME="${BASE_AOAI_ACCOUNT_NAME}-${DEPLOY_SUFFIX}-${attempt}"
+        echo "Retrying with AOAI account name: $AOAI_ACCOUNT_NAME"
+      fi
+
+      if az cognitiveservices account create \
+        --name "$AOAI_ACCOUNT_NAME" \
+        --resource-group "$AOAI_RESOURCE_GROUP" \
+        --location "$AOAI_LOCATION" \
+        --kind OpenAI \
+        --sku "$AOAI_SKU" \
+        --custom-domain "$AOAI_ACCOUNT_NAME" \
+        --yes \
+        --output none; then
+        AOAI_CREATED=true
+        break
+      fi
+    done
+
+    if [[ "$AOAI_CREATED" != "true" ]]; then
+      echo "Failed to create Azure OpenAI account after multiple name attempts."
+      echo "Set AOAI_ACCOUNT_NAME to a unique value and rerun."
+      exit 1
+    fi
   fi
 fi
 
