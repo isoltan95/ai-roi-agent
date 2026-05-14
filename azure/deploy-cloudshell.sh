@@ -111,6 +111,13 @@ if [[ "$CREATE_AOAI_RESOURCE" == "true" ]]; then
     --location "$AOAI_LOCATION" \
     --output none
 
+  # For fresh provisioning, force a unique AOAI account/custom-domain name per run
+  # to avoid global subdomain collisions and stale shell env values.
+  if [[ "$AOAI_ACCOUNT_NAME" != *"-${DEPLOY_SUFFIX}"* ]]; then
+    AOAI_ACCOUNT_NAME="${AOAI_ACCOUNT_NAME}-${DEPLOY_SUFFIX}"
+  fi
+  echo "Using AOAI account name: $AOAI_ACCOUNT_NAME"
+
   if az cognitiveservices account show \
     --resource-group "$AOAI_RESOURCE_GROUP" \
     --name "$AOAI_ACCOUNT_NAME" \
