@@ -30,11 +30,33 @@ rm -f backend.zip
 (cd backend && zip -r ../backend.zip . -x "*.pyc" "*__pycache__*" ".env" ".venv/*")
 
 echo "Deploying to $WEBAPP_NAME in $RESOURCE_GROUP..."
-az webapp deploy \
-  --name "$WEBAPP_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --src-path backend.zip \
-  --type zip
+deploy_ok=false
+for attempt in 1 2 3; do
+  echo "Zip deploy attempt ${attempt}/3..."
+  if az webapp deploy \
+    --name "$WEBAPP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --src-path backend.zip \
+    --type zip; then
+    deploy_ok=true
+    break
+  fi
+  echo "Zip deploy attempt ${attempt} failed. Restarting app and retrying..."
+  az webapp restart \
+    --name "$WEBAPP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --output none || true
+  sleep 15
+done
+
+if [[ "$deploy_ok" != "true" ]]; then
+  echo "Zip deploy failed after retries. Trying config-zip fallback..."
+  az webapp deployment source config-zip \
+    --name "$WEBAPP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --src backend.zip \
+    --output none
+fi
 
 echo "Restarting web app to ensure new settings are loaded..."
 az webapp restart \
