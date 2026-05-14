@@ -21,17 +21,20 @@ fi
 
 # ---- Required inputs ----
 SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-}"
-RESOURCE_GROUP="${RESOURCE_GROUP:-npc-ai-roi-rg}"
+
+# Generate a unique suffix by default so each run can create a fresh environment.
+DEPLOY_SUFFIX="${DEPLOY_SUFFIX:-$(date +%s)}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-npc-ai-roi-app-${DEPLOY_SUFFIX}}"
 LOCATION="${LOCATION:-swedencentral}"
 
 # Azure OpenAI options
 # If CREATE_AOAI_RESOURCE=true, script can create account + deployment.
-CREATE_AOAI_RESOURCE="${CREATE_AOAI_RESOURCE:-false}"
+CREATE_AOAI_RESOURCE="${CREATE_AOAI_RESOURCE:-true}"
 CREATE_AOAI_DEPLOYMENT="${CREATE_AOAI_DEPLOYMENT:-true}"
 
 # Existing/target Azure OpenAI account details
-AOAI_RESOURCE_GROUP="${AOAI_RESOURCE_GROUP:-$RESOURCE_GROUP}"
-AOAI_ACCOUNT_NAME="${AOAI_ACCOUNT_NAME:-}"
+AOAI_RESOURCE_GROUP="${AOAI_RESOURCE_GROUP:-npc-ai-roi-aoai-${DEPLOY_SUFFIX}}"
+AOAI_ACCOUNT_NAME="${AOAI_ACCOUNT_NAME:-aoainpc${DEPLOY_SUFFIX}}"
 AOAI_LOCATION="${AOAI_LOCATION:-$LOCATION}"
 AOAI_SKU="${AOAI_SKU:-S0}"
 
@@ -51,11 +54,6 @@ STORAGE_ACCOUNT_NAME="${STORAGE_ACCOUNT_NAME:-npcairoi$(date +%s | tail -c 7)}"
 
 if [[ -z "$SUBSCRIPTION_ID" ]]; then
   echo "Set SUBSCRIPTION_ID before running."
-  exit 1
-fi
-
-if [[ -z "$AOAI_ACCOUNT_NAME" ]]; then
-  echo "Set AOAI_ACCOUNT_NAME before running."
   exit 1
 fi
 
