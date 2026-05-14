@@ -52,7 +52,7 @@ export default function Step4DataTimeline() {
   return (
     <div className="space-y-6">
       {/* Data Availability */}
-      <div>
+      <div data-field="data_availability">
         <label className="label">{t('form.dataAvailability')} *</label>
         <div className="space-y-2">
           {DATA_AVAILABILITY.map((opt) => (
@@ -80,8 +80,8 @@ export default function Step4DataTimeline() {
       </div>
 
       {/* Data Types */}
-      <div>
-        <label className="label">{t('form.dataTypes')}</label>
+      <div data-field="data_types">
+        <label className="label">{t('form.dataTypes')} *</label>
         <Controller
           name="data_types"
           control={control}

@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useForm, FormProvider } from 'react-hook-form'
+import type { FieldErrors, FieldPath } from 'react-hook-form'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -94,6 +95,27 @@ export default function EvaluatePage() {
     }
   }
 
+  const onInvalid = (errors: FieldErrors<UseCaseInput>) => {
+    const firstInvalid = Object.keys(errors)[0] as FieldPath<UseCaseInput> | undefined
+    if (!firstInvalid) {
+      toast.error(t('form.required'))
+      return
+    }
+
+    const byName = document.querySelector(`[name="${firstInvalid}"]`) as HTMLElement | null
+    const byField = document.querySelector(`[data-field="${firstInvalid}"]`) as HTMLElement | null
+    const target = byName ?? byField
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (typeof (target as HTMLInputElement).focus === 'function') {
+        ;(target as HTMLInputElement).focus()
+      }
+    }
+
+    toast.error(t('form.required'))
+  }
+
   return (
     <div className="min-h-screen relative">
       <div className="mesh-bg" />
@@ -126,7 +148,7 @@ export default function EvaluatePage() {
         {/* Form card */}
         <div className="glass-card p-8 overflow-hidden">
           <FormProvider {...methods}>
-            <form onSubmit={methods.handleSubmit(onSubmit)}>
+            <form onSubmit={methods.handleSubmit(onSubmit, onInvalid)}>
               <AnimatePresence mode="wait" custom={direction}>
                 <motion.div
                   key={step}
