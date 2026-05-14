@@ -20,7 +20,7 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 # ---- Required inputs ----
-SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-}"
+SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-bb31a276-e508-4d93-b8ab-12b8d4823c62}"
 
 # Generate a unique suffix by default so each run can create a fresh environment.
 DEPLOY_SUFFIX="${DEPLOY_SUFFIX:-$(date +%s)}"
