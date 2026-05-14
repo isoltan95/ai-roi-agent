@@ -15,7 +15,14 @@ echo "Setting backend CORS frontend origin..."
 az webapp config appsettings set \
   --name "$WEBAPP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
-  --settings FRONTEND_ORIGIN="$FRONTEND_ORIGIN" \
+  --settings FRONTEND_ORIGIN="$FRONTEND_ORIGIN" SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+  --output none
+
+echo "Ensuring Python startup command is configured..."
+az webapp config set \
+  --name "$WEBAPP_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --startup-file 'python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}' \
   --output none
 
 echo "Setting App Service platform CORS fallback..."
