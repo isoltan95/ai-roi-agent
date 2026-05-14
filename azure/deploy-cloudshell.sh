@@ -263,6 +263,7 @@ if [[ "$USE_KEYLESS_AUTH" == "true" ]]; then
       AZURE_OPENAI_DEPLOYMENT="$AOAI_DEPLOYMENT" \
       AZURE_OPENAI_API_VERSION="$AOAI_API_VERSION" \
       AZURE_OPENAI_USE_KEYLESS=true \
+      FRONTEND_ORIGIN="https://${STORAGE_ACCOUNT_NAME}.z1.web.core.windows.net" \
     --output none
 else
   az webapp config appsettings set \
@@ -275,6 +276,7 @@ else
       AZURE_OPENAI_DEPLOYMENT="$AOAI_DEPLOYMENT" \
       AZURE_OPENAI_API_VERSION="$AOAI_API_VERSION" \
       AZURE_OPENAI_USE_KEYLESS=false \
+      FRONTEND_ORIGIN="https://${STORAGE_ACCOUNT_NAME}.z1.web.core.windows.net" \
     --output none
 fi
 

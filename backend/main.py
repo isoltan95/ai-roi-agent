@@ -13,21 +13,19 @@ from app.npc_structure import NPC_SECTORS
 
 app = FastAPI(title="NPC AI ROI Agent", version="1.0.0")
 
-# CORS configuration: allow localhost for development and any https origin for deployed frontends
+frontend_origin = os.environ.get("FRONTEND_ORIGIN", "").rstrip("/")
 cors_origins = [
     "http://localhost:5173",
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
 ]
-
-# Allow all HTTPS origins (suitable for deployed static sites)
-# In production, consider restricting to specific domains
-allow_all_https = True
+if frontend_origin:
+    cors_origins.append(frontend_origin)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if not allow_all_https else ["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
