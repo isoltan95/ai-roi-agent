@@ -22,13 +22,27 @@ fi
 # ---- Required inputs ----
 SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-}"
 RESOURCE_GROUP="${RESOURCE_GROUP:-npc-ai-roi-rg}"
-LOCATION="${LOCATION:-qatarcentral}"
+LOCATION="${LOCATION:-swedencentral}"
 
-# Existing Azure OpenAI account (subscription-scope resources)
-AOAI_RESOURCE_GROUP="${AOAI_RESOURCE_GROUP:-}"
+# Azure OpenAI options
+# If CREATE_AOAI_RESOURCE=true, script can create account + deployment.
+CREATE_AOAI_RESOURCE="${CREATE_AOAI_RESOURCE:-false}"
+CREATE_AOAI_DEPLOYMENT="${CREATE_AOAI_DEPLOYMENT:-true}"
+
+# Existing/target Azure OpenAI account details
+AOAI_RESOURCE_GROUP="${AOAI_RESOURCE_GROUP:-$RESOURCE_GROUP}"
 AOAI_ACCOUNT_NAME="${AOAI_ACCOUNT_NAME:-}"
+AOAI_LOCATION="${AOAI_LOCATION:-$LOCATION}"
+AOAI_SKU="${AOAI_SKU:-S0}"
+
+# Model deployment details
 AOAI_DEPLOYMENT="${AOAI_DEPLOYMENT:-gpt-4o}"
 AOAI_API_VERSION="${AOAI_API_VERSION:-2024-02-01}"
+AOAI_MODEL_NAME="${AOAI_MODEL_NAME:-gpt-4o}"
+AOAI_MODEL_VERSION="${AOAI_MODEL_VERSION:-2024-11-20}"
+AOAI_MODEL_FORMAT="${AOAI_MODEL_FORMAT:-OpenAI}"
+AOAI_DEPLOYMENT_SKU_NAME="${AOAI_DEPLOYMENT_SKU_NAME:-Standard}"
+AOAI_DEPLOYMENT_SKU_CAPACITY="${AOAI_DEPLOYMENT_SKU_CAPACITY:-1}"
 
 # Optional names (auto-generated if empty)
 WEBAPP_NAME="${WEBAPP_NAME:-npc-ai-roi-api-$(date +%s)}"
@@ -40,8 +54,8 @@ if [[ -z "$SUBSCRIPTION_ID" ]]; then
   exit 1
 fi
 
-if [[ -z "$AOAI_RESOURCE_GROUP" || -z "$AOAI_ACCOUNT_NAME" ]]; then
-  echo "Set AOAI_RESOURCE_GROUP and AOAI_ACCOUNT_NAME before running."
+if [[ -z "$AOAI_ACCOUNT_NAME" ]]; then
+  echo "Set AOAI_ACCOUNT_NAME before running."
   exit 1
 fi
 
@@ -62,6 +76,54 @@ az group create \
   --name "$RESOURCE_GROUP" \
   --location "$LOCATION" \
   --output none
+
+if [[ "$CREATE_AOAI_RESOURCE" == "true" ]]; then
+  echo "Creating Azure OpenAI resource group (if needed)..."
+  az group create \
+    --name "$AOAI_RESOURCE_GROUP" \
+    --location "$AOAI_LOCATION" \
+    --output none
+
+  if az cognitiveservices account show \
+    --resource-group "$AOAI_RESOURCE_GROUP" \
+    --name "$AOAI_ACCOUNT_NAME" \
+    --output none 2>/dev/null; then
+    echo "Azure OpenAI account already exists: $AOAI_ACCOUNT_NAME"
+  else
+    echo "Creating Azure OpenAI account..."
+    az cognitiveservices account create \
+      --name "$AOAI_ACCOUNT_NAME" \
+      --resource-group "$AOAI_RESOURCE_GROUP" \
+      --location "$AOAI_LOCATION" \
+      --kind OpenAI \
+      --sku "$AOAI_SKU" \
+      --custom-domain "$AOAI_ACCOUNT_NAME" \
+      --yes \
+      --output none
+  fi
+fi
+
+if [[ "$CREATE_AOAI_DEPLOYMENT" == "true" ]]; then
+  if az cognitiveservices account deployment show \
+    --name "$AOAI_ACCOUNT_NAME" \
+    --resource-group "$AOAI_RESOURCE_GROUP" \
+    --deployment-name "$AOAI_DEPLOYMENT" \
+    --output none 2>/dev/null; then
+    echo "Azure OpenAI deployment already exists: $AOAI_DEPLOYMENT"
+  else
+    echo "Creating Azure OpenAI model deployment..."
+    az cognitiveservices account deployment create \
+      --name "$AOAI_ACCOUNT_NAME" \
+      --resource-group "$AOAI_RESOURCE_GROUP" \
+      --deployment-name "$AOAI_DEPLOYMENT" \
+      --model-name "$AOAI_MODEL_NAME" \
+      --model-version "$AOAI_MODEL_VERSION" \
+      --model-format "$AOAI_MODEL_FORMAT" \
+      --sku-name "$AOAI_DEPLOYMENT_SKU_NAME" \
+      --sku-capacity "$AOAI_DEPLOYMENT_SKU_CAPACITY" \
+      --output none
+  fi
+fi
 
 echo "Reading Azure OpenAI endpoint and key..."
 AOAI_ENDPOINT="$(az cognitiveservices account show \
@@ -185,6 +247,9 @@ echo "\nDeployment complete."
 echo "----------------------------------------"
 echo "Frontend URL: ${STATIC_ENDPOINT}"
 echo "Backend URL:  ${BACKEND_URL}"
+echo "AOAI RG:      ${AOAI_RESOURCE_GROUP}"
+echo "AOAI Account: ${AOAI_ACCOUNT_NAME}"
+echo "AOAI Deploy:  ${AOAI_DEPLOYMENT}"
 echo "\nBackend environment values in Azure App Service:"
 echo "AZURE_OPENAI_ENDPOINT=${AOAI_ENDPOINT}"
 echo "AZURE_OPENAI_DEPLOYMENT=${AOAI_DEPLOYMENT}"
