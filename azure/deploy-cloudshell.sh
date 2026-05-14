@@ -125,23 +125,40 @@ if [[ "$CREATE_AOAI_DEPLOYMENT" == "true" ]]; then
   fi
 fi
 
-echo "Reading Azure OpenAI endpoint and key..."
+echo "Reading Azure OpenAI endpoint..."
 AOAI_ENDPOINT="$(az cognitiveservices account show \
   --resource-group "$AOAI_RESOURCE_GROUP" \
   --name "$AOAI_ACCOUNT_NAME" \
   --query properties.endpoint -o tsv)"
 
-AOAI_KEY="$(az cognitiveservices account keys list \
-  --resource-group "$AOAI_RESOURCE_GROUP" \
-  --name "$AOAI_ACCOUNT_NAME" \
-  --query key1 -o tsv)"
-
-if [[ -z "$AOAI_ENDPOINT" || -z "$AOAI_KEY" ]]; then
-  echo "Could not retrieve Azure OpenAI endpoint/key. Check RBAC access to the AOAI resource."
+if [[ -z "$AOAI_ENDPOINT" ]]; then
+  echo "Could not retrieve Azure OpenAI endpoint. Check RBAC access to the AOAI resource."
   exit 1
 fi
 
+# Try to enable local auth (API keys) so we can retrieve a key.
+# This is a no-op if already enabled.
+echo "Enabling local auth on Azure OpenAI account (required for API key retrieval)..."
+az cognitiveservices account update \
+  --name "$AOAI_ACCOUNT_NAME" \
+  --resource-group "$AOAI_RESOURCE_GROUP" \
+  --set properties.disableLocalAuth=false \
+  --output none 2>/dev/null || echo "Warning: Could not enable local auth. Will attempt keyless auth."
+
+AOAI_KEY="$(az cognitiveservices account keys list \
+  --resource-group "$AOAI_RESOURCE_GROUP" \
+  --name "$AOAI_ACCOUNT_NAME" \
+  --query key1 -o tsv 2>/dev/null || true)"
+
+if [[ -z "$AOAI_KEY" ]]; then
+  echo "API key not available (disableLocalAuth may still be true). Deploying with keyless Azure AD auth."
+  USE_KEYLESS_AUTH=true
+else
+  USE_KEYLESS_AUTH=false
+fi
+
 echo "Creating App Service plan and Web App..."
+# Note: managed identity RBAC assignment happens after webapp creation below.
 az appservice plan create \
   --name "$PLAN_NAME" \
   --resource-group "$RESOURCE_GROUP" \
@@ -156,17 +173,55 @@ az webapp create \
   --runtime "PYTHON:3.11" \
   --output none
 
-echo "Configuring backend app settings..."
-az webapp config appsettings set \
+# Enable system-assigned managed identity on App Service
+echo "Enabling system-assigned managed identity on App Service..."
+az webapp identity assign \
   --name "$WEBAPP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
-  --settings \
-    SCM_DO_BUILD_DURING_DEPLOYMENT=true \
-    AZURE_OPENAI_ENDPOINT="$AOAI_ENDPOINT" \
-    AZURE_OPENAI_API_KEY="$AOAI_KEY" \
-    AZURE_OPENAI_DEPLOYMENT="$AOAI_DEPLOYMENT" \
-    AZURE_OPENAI_API_VERSION="$AOAI_API_VERSION" \
   --output none
+
+if [[ "$USE_KEYLESS_AUTH" == "true" ]]; then
+  echo "Granting App Service managed identity 'Cognitive Services OpenAI User' role on AOAI account..."
+  WEBAPP_PRINCIPAL_ID="$(az webapp identity show \
+    --name "$WEBAPP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --query principalId -o tsv)"
+  AOAI_RESOURCE_ID="$(az cognitiveservices account show \
+    --name "$AOAI_ACCOUNT_NAME" \
+    --resource-group "$AOAI_RESOURCE_GROUP" \
+    --query id -o tsv)"
+  az role assignment create \
+    --assignee "$WEBAPP_PRINCIPAL_ID" \
+    --role "Cognitive Services OpenAI User" \
+    --scope "$AOAI_RESOURCE_ID" \
+    --output none || echo "Warning: Role assignment may already exist or require Owner/RBAC Admin rights."
+fi
+
+echo "Configuring backend app settings..."
+if [[ "$USE_KEYLESS_AUTH" == "true" ]]; then
+  az webapp config appsettings set \
+    --name "$WEBAPP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --settings \
+      SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+      AZURE_OPENAI_ENDPOINT="$AOAI_ENDPOINT" \
+      AZURE_OPENAI_DEPLOYMENT="$AOAI_DEPLOYMENT" \
+      AZURE_OPENAI_API_VERSION="$AOAI_API_VERSION" \
+      AZURE_OPENAI_USE_KEYLESS=true \
+    --output none
+else
+  az webapp config appsettings set \
+    --name "$WEBAPP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --settings \
+      SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+      AZURE_OPENAI_ENDPOINT="$AOAI_ENDPOINT" \
+      AZURE_OPENAI_API_KEY="$AOAI_KEY" \
+      AZURE_OPENAI_DEPLOYMENT="$AOAI_DEPLOYMENT" \
+      AZURE_OPENAI_API_VERSION="$AOAI_API_VERSION" \
+      AZURE_OPENAI_USE_KEYLESS=false \
+    --output none
+fi
 
 az webapp config set \
   --name "$WEBAPP_NAME" \

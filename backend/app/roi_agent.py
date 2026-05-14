@@ -9,10 +9,34 @@ DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
 
 def _get_client() -> AzureOpenAI:
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
-    api_key = os.environ.get("AZURE_OPENAI_API_KEY")
     api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-01")
-    if not endpoint or not api_key:
-        raise ValueError("Missing Azure OpenAI configuration. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY.")
+    use_keyless = os.environ.get("AZURE_OPENAI_USE_KEYLESS", "false").lower() == "true"
+
+    if not endpoint:
+        raise ValueError("Missing AZURE_OPENAI_ENDPOINT environment variable.")
+
+    if use_keyless:
+        # Azure AD token-based auth (no API key required)
+        try:
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+            token_provider = get_bearer_token_provider(
+                DefaultAzureCredential(),
+                "https://cognitiveservices.azure.com/.default"
+            )
+            return AzureOpenAI(
+                azure_endpoint=endpoint,
+                azure_ad_token_provider=token_provider,
+                api_version=api_version,
+            )
+        except ImportError:
+            raise ValueError(
+                "azure-identity package is required for keyless auth. "
+                "Add 'azure-identity' to requirements.txt."
+            )
+
+    api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("Missing AZURE_OPENAI_API_KEY. Set it or enable AZURE_OPENAI_USE_KEYLESS=true.")
     return AzureOpenAI(
         azure_endpoint=endpoint,
         api_key=api_key,
