@@ -18,6 +18,13 @@ az webapp config appsettings set \
   --settings FRONTEND_ORIGIN="$FRONTEND_ORIGIN" \
   --output none
 
+echo "Setting App Service platform CORS fallback..."
+az webapp cors add \
+  --name "$WEBAPP_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --allowed-origins "$FRONTEND_ORIGIN" \
+  --output none || true
+
 echo "Packaging backend..."
 rm -f backend.zip
 (cd backend && zip -r ../backend.zip . -x "*.pyc" "*__pycache__*" ".env" ".venv/*")
