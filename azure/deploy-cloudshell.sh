@@ -68,8 +68,37 @@ if [[ ! -d "$BACKEND_DIR" || ! -d "$FRONTEND_DIR" ]]; then
   exit 1
 fi
 
+ensure_rg_location() {
+  local rg_name="$1"
+  local desired_location="$2"
+  local rg_label="$3"
+
+  if az group show --name "$rg_name" --query name -o tsv >/dev/null 2>&1; then
+    local existing_location
+    existing_location="$(az group show --name "$rg_name" --query location -o tsv)"
+    if [[ "$existing_location" != "$desired_location" ]]; then
+      echo ""
+      echo "ERROR: ${rg_label} resource group location mismatch."
+      echo "- Resource group: $rg_name"
+      echo "- Existing location: $existing_location"
+      echo "- Requested location: $desired_location"
+      echo ""
+      echo "Resource group locations are immutable in Azure."
+      echo "Choose one of these options and rerun:"
+      echo "1) Use a NEW resource group name for $desired_location"
+      echo "2) Keep this resource group and set location to $existing_location"
+      exit 1
+    fi
+  fi
+}
+
 echo "Selecting subscription..."
 az account set --subscription "$SUBSCRIPTION_ID"
+
+ensure_rg_location "$RESOURCE_GROUP" "$LOCATION" "Application"
+if [[ "$CREATE_AOAI_RESOURCE" == "true" ]]; then
+  ensure_rg_location "$AOAI_RESOURCE_GROUP" "$AOAI_LOCATION" "AOAI"
+fi
 
 echo "Creating resource group (if needed)..."
 az group create \
