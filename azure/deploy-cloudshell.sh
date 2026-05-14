@@ -24,7 +24,7 @@ SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-bb31a276-e508-4d93-b8ab-12b8d4823c62}"
 
 # Generate a unique suffix by default so each run can create a fresh environment.
 DEPLOY_SUFFIX="${DEPLOY_SUFFIX:-$(date +%s)}"
-RESOURCE_GROUP="${RESOURCE_GROUP:-npc-ai-roi-app-${DEPLOY_SUFFIX}}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-npc-ai-roi-app-1778762630}"
 LOCATION="${LOCATION:-swedencentral}"
 
 # Azure OpenAI options
@@ -48,7 +48,7 @@ AOAI_DEPLOYMENT_SKU_NAME="${AOAI_DEPLOYMENT_SKU_NAME:-Standard}"
 AOAI_DEPLOYMENT_SKU_CAPACITY="${AOAI_DEPLOYMENT_SKU_CAPACITY:-1}"
 
 # Optional names (auto-generated if empty)
-WEBAPP_NAME="${WEBAPP_NAME:-npc-ai-roi-api-$(date +%s)}"
+WEBAPP_NAME="${WEBAPP_NAME:-npc-ai-roi-api-1778762630}"
 PLAN_NAME="${PLAN_NAME:-npc-ai-roi-plan}"
 STORAGE_ACCOUNT_NAME="${STORAGE_ACCOUNT_NAME:-npcairoi$(date +%s | tail -c 7)}"
 
