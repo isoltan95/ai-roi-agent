@@ -243,11 +243,13 @@ if [[ "$USE_KEYLESS_AUTH" == "true" ]]; then
     --name "$AOAI_ACCOUNT_NAME" \
     --resource-group "$AOAI_RESOURCE_GROUP" \
     --query id -o tsv)"
+  # Use --assignee-object-id to bypass Graph lookup delays
   az role assignment create \
-    --assignee "$WEBAPP_PRINCIPAL_ID" \
+    --assignee-object-id "$WEBAPP_PRINCIPAL_ID" \
+    --assignee-principal-type ServicePrincipal \
     --role "Cognitive Services OpenAI User" \
     --scope "$AOAI_RESOURCE_ID" \
-    --output none || echo "Warning: Role assignment may already exist or require Owner/RBAC Admin rights."
+    --output none 2>&1 || echo "Warning: AOAI role assignment failed. Assign 'Cognitive Services OpenAI User' manually to principal $WEBAPP_PRINCIPAL_ID on resource $AOAI_RESOURCE_ID."
 fi
 
 echo "Configuring backend app settings..."
@@ -311,28 +313,34 @@ az storage account create \
   --min-tls-version TLS1_2 \
   --output none
 
+# Grant current Cloud Shell user Storage Blob Data Contributor so login-auth works.
+echo "Granting Storage Blob Data Contributor to current user on storage account..."
+STORAGE_RESOURCE_ID="$(az storage account show \
+  --name "$STORAGE_ACCOUNT_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --query id -o tsv)"
+CURRENT_USER_OID="$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)"
+if [[ -n "$CURRENT_USER_OID" ]]; then
+  az role assignment create \
+    --assignee-object-id "$CURRENT_USER_OID" \
+    --assignee-principal-type User \
+    --role "Storage Blob Data Contributor" \
+    --scope "$STORAGE_RESOURCE_ID" \
+    --output none 2>&1 | grep -v 'already exists' || true
+  echo "Waiting 30s for RBAC to propagate..."
+  sleep 30
+else
+  echo "Warning: Could not determine current user OID. Blob upload may fail if RBAC is not pre-assigned."
+fi
+
 echo "Configuring static website on storage account..."
-if ! az storage blob service-properties update \
+az storage blob service-properties update \
   --account-name "$STORAGE_ACCOUNT_NAME" \
   --static-website \
   --index-document index.html \
   --404-document index.html \
   --auth-mode login \
-  --output none; then
-  echo "RBAC data-plane permission missing for storage account. Falling back to account key auth..."
-  STORAGE_KEY="$(az storage account keys list \
-    --resource-group "$RESOURCE_GROUP" \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --query '[0].value' -o tsv)"
-  az storage blob service-properties update \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --account-key "$STORAGE_KEY" \
-    --static-website \
-    --index-document index.html \
-    --404-document index.html \
-    --auth-mode key \
-    --output none
-fi
+  --output none
 
 echo "Allowing frontend origin on backend CORS..."
 STATIC_ENDPOINT="$(az storage account show \
@@ -358,29 +366,13 @@ EOF
 )
 
 echo "Uploading frontend static files..."
-if ! az storage blob upload-batch \
+az storage blob upload-batch \
   --account-name "$STORAGE_ACCOUNT_NAME" \
   --destination '$web' \
   --source "$FRONTEND_DIR/dist" \
   --auth-mode login \
   --overwrite \
-  --output none; then
-  echo "RBAC data-plane permission missing for blob upload. Falling back to account key auth..."
-  if [[ -z "${STORAGE_KEY:-}" ]]; then
-    STORAGE_KEY="$(az storage account keys list \
-      --resource-group "$RESOURCE_GROUP" \
-      --account-name "$STORAGE_ACCOUNT_NAME" \
-      --query '[0].value' -o tsv)"
-  fi
-  az storage blob upload-batch \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --account-key "$STORAGE_KEY" \
-    --destination '$web' \
-    --source "$FRONTEND_DIR/dist" \
-    --auth-mode key \
-    --overwrite \
-    --output none
-fi
+  --output none
 
 echo "\nDeployment complete."
 echo "----------------------------------------"
